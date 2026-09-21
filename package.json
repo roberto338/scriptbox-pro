@@ -1,0 +1,34 @@
+{
+  "name": "scriptbox-pro",
+  "version": "1.0.0",
+  "description": "ScriptBox Prn MVP - Platform for short-form content generation",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "node server.js",
+    "client": "vite",
+    "start": "node server.js"
+  }
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+   "}
+}
