@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ScriptBox Pro - Générateur de scripts court-forme</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0e27;
+            color: #f0f0f0;
+            line-height: 1.6;
+        }
+        .container { max-width: 1200px; margin: 0 auto; padding: 40px 20px; }
+        header { text-align: center; margin-bottom: 60px; }
+        h1 { font-size: 3rem; font-weight: 800; margin-bottom: 10px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .subtitle { font-size: 1.2rem; color: #a0a0a0; }
+        
+        .pricing { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 30px; margin-bottom: 60px; }
+        .plan { background: #1a1f3a; border: 2px solid #333; border-radius: 12px; padding: 40px; text-align: center; transition: all 0.3s; }
+        .plan:hover { border-color: #667eea; transform: translateY(-5px); }
+        .plan.featured { border-color: #667eea; background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%); }
+        .plan-price { font-size: 2.5rem; font-weight: 800; color: #667eea; margin: 20px 0; }
+        .plan-billing { color: #a0a0a0; margin-bottom: 20px; }
+        .plan-features { text-align: left; margin: 30px 0; font-size: 0.95rem; }
+        .plan-features li { margin: 10px 0; }
+        .plan-features li:before { content: "✓ "; color: #667eea; font-weight: bold; margin-right: 8px; }
+        .btn { padding: 14px 32px; border: none; border-radius: 8px; font-size: 1rem; cursor: pointer; font-weight: 600; transition: all 0.3s; }
+        .btn-primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3); }
+        
+        .waitlist { background: #1a1f3a; border-radius: 12px; padding: 40px; margin-bottom: 40px; }
+        .waitlist h2 { margin-bottom: 20px; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-weight: 600; }
+        input, select { width: 100%; padding: 12px; background: #0a0e27; border: 1px solid #333; border-radius: 8px; color: #f0f0f0; font-size: 1rem; }
+        input:focus, select:focus { outline: none; border-color: #667eea; }
+        
+        .benefits { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 30px; margin: 60px 0; }
+        .benefit { text-align: center; }
+        .benefit-icon { font-size: 2.5rem; margin-bottom: 15px; }
+        .benefit h3 { margin-bottom: 10px; }
+        
+        footer { text-align: center; color: #666; margin-top: 60px; padding-top: 20px; border-top: 1px solid #333; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>ScriptBox Pro</h1>
+            <p class="subtitle">Générez des scripts complets pour vos contenus court-forme — TikTok, Instagram Reels, YouTube Shorts</p>
+        </header>
+
+        <div class="waitlist">
+            <h2>Rejoignez la liste d'attente</h2>
+            <form id="waitlistForm">
+                <div class="form-group">
+                    <label for="name">Votre nom</label>
+                    <input type="text" id="name" name="name" required placeholder="Roberto">
+                </div>
+                <div class="form-group">
+                    <label for="email">Email</label>
+                    <input type="email" id="email" name="email" required placeholder="vous@example.com">
+                </div>
+                <div class="form-group">
+                    <label for="plan">Plan intéressé</label>
+                    <select id="plan" name="plan" required>
+                        <option value="">-- Sélectionnez un plan --</option>
+                        <option value="29">29 €/mois - Starter</option>
+                        <option value="79">79 €/mois - Pro</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%;">Me notifier au lancement</button>
+            </form>
+            <p id="formMessage" style="margin-top: 15px; text-align: center; color: #667eea;"></p>
+        </div>
+
+        <div class="pricing">
+            <div class="plan">
+                <h3>Starter</h3>
+                <div class="plan-price">29€</div>
+                <div class="plan-billing">par mois</div>
+                <ul class="plan-features">
+                    <li>10 scripts par mois</li>
+                    <li>Accès aux templates</li>
+                    <li>Support email</li>
+                </ul>
+                <button class="btn btn-primary" style="width: 100%;">Commencer</button>
+            </div>
+
+            <div class="plan featured">
+                <h3>Pro</h3>
+                <div class="plan-price">79€</div>
+                <div class="plan-billing">par mois</div>
+                <ul class="plan-features">
+                    <li>100 scripts par mois</li>
+                    <li>Tous les templates</li>
+                    <li>Requêtes custom</li>
+                    <li>Priorité support</li>
+                    <li>Analytics intégrées</li>
+                </ul>
+                <button class="btn btn-primary" style="width: 100%;">Commencer</button>
+            </div>
+        </div>
+
+        <div class="benefits">
+            <div class="benefit">
+                <div class="benefit-icon">📝</div>
+                <h3>Scripts complets</h3>
+                <p>Hook accrocheur, script de 60s, visuels détaillés, textes à l'écran</p>
+            </div>
+            <div class="benefit">
+                <div class="benefit-icon">🎬</div>
+                <h3>Prêts à tourner</h3>
+                <p>Aucune rédaction supplémentaire. Directement exploitable.</p>
+            </div>
+            <div class="benefit">
+                <div class="benefit-icon">🌍</div>
+                <h3>Tous les sujets</h3>
+                <p>Motivation, discipline, confiance, développement personnel et plus</p>
+            </div>
+        </div>
+
+        <footer>
+            <p>&copy; 2024 ScriptBox Pro. Tous droits réservés.</p>
+        </footer>
+    </div>
+
+    <script>
+        document.getElementById('waitlistForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const name = document.getElementById('name').value;
+            const email = document.getElementById('email').value;
+            const plan = document.getElementById('plan').value;
+            const messageEl = document.getElementById('formMessage');
+
+            try {
+                const response = await fetch('/api/waitlist', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, email, plan })
+                });
+                
+                if (response.ok) {
+                    messageEl.textContent = '✅ Merci ! Vous avez été ajouté à la liste d\'attente.';
+                    document.getElementById('waitlistForm').reset();
+                } else {
+                    const error = await response.json();
+                    messageEl.textContent = '❌ ' + (error.error || 'Erreur lors de l\'inscription');
+                    messageEl.style.color = '#ff6b6b';
+                }
+            } catch (error) {
+                messageEl.textContent = '❌ Erreur de connexion';
+                messageEl.style.color = '#ff6b6b';
+            }
+        });
+    </script>
+</body>
+</html>
