@@ -4,14 +4,20 @@ const dotenv = require('dotenv');
 const cors = require('cors');
 const axios = require('axios');
 
-console.error('[DEBUG] Starting server...');
 dotenv.config();
-console.error('[DEBUG] Config loaded');
+
+const stripe = process.env.STRIPE_SECRET_KEY
+  ? require('stripe')(process.env.STRIPE_SECRET_KEY)
+  : null;
+
+const PLANS = {
+  '29': { name: 'ScriptBox Pro Starter', amount: 2900 },
+  '79': { name: 'ScriptBox Pro Pro', amount: 7900 }
+};
 
 const app = express();
+app.set('trust proxy', 1);
 app.use(cors());
-app.use(express.json());
-app.use(express.static('public'));
 
 // PostgreSQL Neon
 const pool = new Pool({
@@ -19,48 +25,159 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-// POST /api/waitlist
+// Schéma auto-réparé au démarrage (idempotent)
+async function migrate() {
+  await pool.query(`CREATE TABLE IF NOT EXISTS presales (
+    id SERIAL PRIMARY KEY,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    name VARCHAR(255) NOT NULL,
+    plan VARCHAR(50),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  )`);
+  await pool.query(`ALTER TABLE presales
+    ADD COLUMN IF NOT EXISTS paid BOOLEAN DEFAULT false,
+    ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS stripe_subscription_id VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP`);
+  console.log('DB schema OK');
+}
+
+async function markPaid(session) {
+  await pool.query(
+    `UPDATE presales SET paid = true, paid_at = NOW(),
+       stripe_customer_id = $1, stripe_subscription_id = $2
+     WHERE email = $3`,
+    [session.customer || null, session.subscription || null,
+     session.metadata && session.metadata.email || session.customer_email]
+  );
+}
+
+// Webhook Stripe : doit recevoir le corps brut, donc AVANT express.json()
+app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  if (!stripe || !process.env.STRIPE_WEBHOOK_SECRET) return res.status(503).send('Webhook not configured');
+  let event;
+  try {
+    event = stripe.webhooks.constructEvent(req.body, req.headers['stripe-signature'], process.env.STRIPE_WEBHOOK_SECRET);
+  } catch (err) {
+    console.error('Webhook signature error:', err.message);
+    return res.status(400).send('Bad signature');
+  }
+  try {
+    if (event.type === 'checkout.session.completed') {
+      await markPaid(event.data.object);
+    } else if (event.type === 'customer.subscription.deleted') {
+      await pool.query('UPDATE presales SET paid = false WHERE stripe_subscription_id = $1', [event.data.object.id]);
+    }
+    res.json({ received: true });
+  } catch (err) {
+    console.error('Webhook handler error:', err);
+    res.status(500).send('Handler error');
+  }
+});
+
+app.use(express.json());
+app.use(express.static('public'));
+
+function baseUrl(req) {
+  return process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`;
+}
+
+// POST /api/waitlist : enregistre le lead puis ouvre Stripe Checkout
 app.post('/api/waitlist', async (req, res) => {
   const { name, email, plan } = req.body;
 
   if (!name || !email || !plan) {
-    return res.status(400).json({ error: 'Missing fields' });
+    return res.status(400).json({ error: 'Champs manquants' });
+  }
+  if (!PLANS[plan]) {
+    return res.status(400).json({ error: 'Plan invalide' });
+  }
+
+  let id;
+  try {
+    // Upsert : un email déjà inscrit ne provoque plus d'erreur 500
+    const result = await pool.query(
+      `INSERT INTO presales (name, email, plan) VALUES ($1, $2, $3)
+       ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name, plan = EXCLUDED.plan
+       RETURNING id, paid`,
+      [name, email, plan]
+    );
+    id = result.rows[0].id;
+    if (result.rows[0].paid) {
+      return res.status(200).json({ id, message: 'Déjà abonné', alreadyPaid: true });
+    }
+  } catch (error) {
+    console.error('Database error:', error);
+    return res.status(500).json({ error: 'Database error' });
+  }
+
+  // Brevo (non bloquant)
+  axios.post('https://api.brevo.com/v3/contacts', {
+    email,
+    attributes: { NAME: name, PLAN: plan },
+    listIds: [parseInt(process.env.BREVO_LIST_ID || '2', 10)],
+    updateEnabled: true
+  }, {
+    headers: { 'api-key': process.env.BREVO_API_KEY, 'Content-Type': 'application/json' }
+  }).catch(e => console.error('Brevo error:', e.response ? JSON.stringify(e.response.data) : e.message));
+
+  if (!stripe) {
+    return res.status(201).json({ id, message: 'Ajouté à la waitlist (paiement indisponible)' });
   }
 
   try {
-    // Store in Neon
-    const query = 'INSERT INTO presales (name, email, plan) VALUES ($1, $2, $3) RETURNING id';
-    const result = await pool.query(query, [name, email, plan]);
-
-    // Send to Brevo
-    try {
-      await axios.post('https://api.brevo.com/v3/contacts', {
-        email,
-        attributes: { NAME: name, PLAN: plan },
-        listIds: [parseInt(process.env.BREVO_LIST_ID || 2)],
-        updateEnabled: true
-      }, {
-        headers: {
-          'api-key': process.env.BREVO_API_KEY,
-          'Content-Type': 'application/json'
+    const p = PLANS[plan];
+    const session = await stripe.checkout.sessions.create({
+      mode: 'subscription',
+      customer_email: email,
+      line_items: [{
+        quantity: 1,
+        price_data: {
+          currency: 'eur',
+          unit_amount: p.amount,
+          recurring: { interval: 'month' },
+          product_data: { name: p.name }
         }
-      });
-    } catch (brevoError) {
-      console.error('Brevo error:', brevoError.message);
-      // Continue anyway - DB insert succeeded
-    }
-
-    res.status(201).json({ id: result.rows[0].id, message: 'Added to waitlist' });
+      }],
+      metadata: { email, plan, presale_id: String(id) },
+      success_url: `${baseUrl(req)}/success.html?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl(req)}/?canceled=1`
+    });
+    res.status(201).json({ id, url: session.url });
   } catch (error) {
-    console.error('Database error:', error);
-    res.status(500).json({ error: 'Database error' });
+    console.error('Stripe error:', error.message);
+    res.status(201).json({ id, message: 'Ajouté à la waitlist (paiement momentanément indisponible)' });
   }
 });
 
-// GET /api/presales (for testing)
+// Vérification au retour de Stripe (filet de sécurité si le webhook tarde)
+app.get('/api/checkout/verify', async (req, res) => {
+  if (!stripe) return res.status(503).json({ error: 'Stripe non configuré' });
+  try {
+    const session = await stripe.checkout.sessions.retrieve(String(req.query.session_id || ''));
+    const paid = session.payment_status === 'paid' || session.status === 'complete';
+    if (paid) await markPaid(session);
+    res.json({ paid, email: session.customer_email, plan: session.metadata && session.metadata.plan });
+  } catch (error) {
+    console.error('Verify error:', error.message);
+    res.status(400).json({ error: 'Session invalide' });
+  }
+});
+
+// GET /api/health : utilisé par la routine de monitoring
+app.get('/api/health', async (req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    res.json({ ok: true, stripe: !!stripe, webhook: !!process.env.STRIPE_WEBHOOK_SECRET });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: 'db' });
+  }
+});
+
+// GET /api/presales (tests)
 app.get('/api/presales', async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM presales ORDER BY created_at DESC');
+    const result = await pool.query('SELECT id, name, email, plan, paid, created_at FROM presales ORDER BY created_at DESC');
     res.json(result.rows);
   } catch (error) {
     console.error('Database error:', error);
@@ -69,6 +186,8 @@ app.get('/api/presales', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`ScriptBox Pro listening on port ${PORT}`);
-});
+migrate()
+  .catch(e => console.error('Migration error:', e.message))
+  .finally(() => {
+    app.listen(PORT, () => console.log(`ScriptBox Pro listening on port ${PORT}`));
+  });

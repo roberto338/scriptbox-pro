@@ -74,7 +74,7 @@
             <option value="79">Pro - 79€/mois</option>
           </select>
         </div>
-        <button type="submit">Rejoindre la waitlist</button>
+        <button type="submit">S'abonner maintenant</button>
       </form>
       <p id="message" style="margin-top: 1rem; text-align: center;"></p>
     </div>
@@ -98,12 +98,21 @@
           body: JSON.stringify({ name, email, plan })
         });
         
+        const data = await response.json().catch(() => ({}));
+        if (response.ok && data.url) {
+          document.getElementById('message').textContent = 'Redirection vers le paiement sécurisé...';
+          document.getElementById('message').style.color = '#667eea';
+          window.location.href = data.url;
+          return;
+        }
         if (response.ok) {
-          document.getElementById('message').textContent = '✓ Merci! Tu recevras un email bientôt.';
+          document.getElementById('message').textContent = data.alreadyPaid
+            ? '✓ Tu es déjà abonné. Merci !'
+            : '✓ Merci! Tu recevras un email bientôt.';
           document.getElementById('message').style.color = '#667eea';
           document.getElementById('waitlist-form').reset();
         } else {
-          throw new Error('Erreur');
+          throw new Error(data.error || 'Erreur');
         }
       } catch (error) {
         document.getElementById('message').textContent = 'Erreur. Réessaye plus tard.';
