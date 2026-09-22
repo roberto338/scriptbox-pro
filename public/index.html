@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ScriptBox Pro - Automatisation des Scripts</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.6; color: #333; }
+    .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 4rem 2rem; text-align: center; }
+    .header h1 { font-size: 3rem; margin-bottom: 1rem; }
+    .header p { font-size: 1.3rem; opacity: 0.9; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+    .pricing { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin: 3rem 0; }
+    .card { border: 1px solid #ddd; border-radius: 8px; padding: 2rem; text-align: center; }
+    .card.featured { border: 2px solid #667eea; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15); }
+    .card h3 { font-size: 1.5rem; margin-bottom: 1rem; }
+    .card .price { font-size: 2.5rem; color: #667eea; margin-bottom: 1rem; }
+    .card .period { font-size: 0.9rem; color: #666; }
+    .card ul { list-style: none; margin: 1.5rem 0; text-align: left; }
+    .card li { padding: 0.5rem 0; }
+    .card li:before { content: "✓ "; color: #667eea; font-weight: bold; }
+    .form-section { margin: 3rem 0; }
+    .form-section h2 { margin-bottom: 2rem; }
+    .form-group { margin-bottom: 1rem; }
+    input, select { width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px; font-size: 1rem; }
+    button { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 0.75rem 2rem; border: none; border-radius: 4px; font-size: 1rem; cursor: pointer; }
+    button:hover { opacity: 0.9; }
+    .footer { background: #f5f5f5; padding: 2rem; margin-top: 3rem; text-align: center; color: #666; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>ScriptBox Pro</h1>
+    <p>Automatise tes scripts et gagne du temps</p>
+  </div>
+
+  <div class="container">
+    <div class="pricing">
+      <div class="card">
+        <h3>Starter</h3>
+        <div class="price">29€<span class="period">/mois</span></div>
+        <ul>
+          <li>Jusqu'à 100 scripts</li>
+          <li>Support email</li>
+          <li>Dashboard basique</li>
+        </ul>
+      </div>
+      <div class="card featured">
+        <h3>Pro</h3>
+        <div class="price">79€<span class="period">/mois</span></div>
+        <ul>
+          <li>Scripts illimités</li>
+          <li>Support prioritaire</li>
+          <li>Analytics avancées</li>
+          <li>API personnalisée</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <h2>Rejoin la waitlist</h2>
+      <form id="waitlist-form">
+        <div class="form-group">
+          <input type="text" id="name" placeholder="Ton nom" required>
+        </div>
+        <div class="form-group">
+          <input type="email" id="email" placeholder="Ton email" required>
+        </div>
+        <div class="form-group">
+          <select id="plan" required>
+            <option value="">Choisi ton plan</option>
+            <option value="29">Starter - 29€/mois</option>
+            <option value="79">Pro - 79€/mois</option>
+          </select>
+        </div>
+        <button type="submit">Rejoindre la waitlist</button>
+      </form>
+      <p id="message" style="margin-top: 1rem; text-align: center;"></p>
+    </div>
+  </div>
+
+  <div class="footer">
+    <p>&copy; 2025 ScriptBox Pro. Tous droits réservés.</p>
+  </div>
+
+  <script>
+    document.getElementById('waitlist-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = document.getElementById('name').value;
+      const email = document.getElementById('email').value;
+      const plan = document.getElementById('plan').value;
+      
+      try {
+        const response = await fetch('/api/waitlist', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, email, plan })
+        });
+        
+        if (response.ok) {
+          document.getElementById('message').textContent = '✓ Merci! Tu recevras un email bientôt.';
+          document.getElementById('message').style.color = '#667eea';
+          document.getElementById('waitlist-form').reset();
+        } else {
+          throw new Error('Erreur');
+        }
+      } catch (error) {
+        document.getElementById('message').textContent = 'Erreur. Réessaye plus tard.';
+        document.getElementById('message').style.color = '#e74c3c';
+      }
+    });
+  </script>
+</body>
+</html>
