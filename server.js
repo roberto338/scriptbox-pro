@@ -3,6 +3,7 @@ const { Pool } = require('pg');
 const dotenv = require('dotenv');
 const cors = require('cors');
 const axios = require('axios');
+const crypto = require('crypto');
 
 dotenv.config();
 
@@ -17,7 +18,46 @@ const PLANS = {
 
 const app = express();
 app.set('trust proxy', 1);
+app.disable('x-powered-by');
+
+// En-têtes de sécurité HTTP (équivalent helmet, sans dépendance)
+app.use((req, res, next) => {
+  res.setHeader('Content-Security-Policy', [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data:",
+    "connect-src 'self'",
+    "form-action 'self'",
+    "base-uri 'self'",
+    "object-src 'none'",
+    "frame-ancestors 'none'"
+  ].join('; '));
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  next();
+});
+
 app.use(cors());
+
+// Accès admin : en-tête "x-admin-token" ou "Authorization: Bearer <token>" = ADMIN_TOKEN
+function isAdmin(req) {
+  const expected = process.env.ADMIN_TOKEN;
+  if (!expected) return false;
+  const auth = req.get('authorization') || '';
+  const given = req.get('x-admin-token') || (auth.startsWith('Bearer ') ? auth.slice(7) : '');
+  const a = Buffer.from(String(given));
+  const b = Buffer.from(expected);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+function requireAdmin(req, res, next) {
+  if (isAdmin(req)) return next();
+  res.status(401).json({ error: 'Non autorisé' });
+}
 
 // PostgreSQL Neon
 const pool = new Pool({
@@ -76,6 +116,23 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
 });
 
 app.use(express.json());
+
+// SEO : robots.txt et sitemap.xml (URL de base = PUBLIC_URL ou hôte de la requête)
+app.get('/robots.txt', (req, res) => {
+  res.type('text/plain').send(
+    `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /success.html\n\nSitemap: ${baseUrl(req)}/sitemap.xml\n`
+  );
+});
+
+app.get('/sitemap.xml', (req, res) => {
+  res.type('application/xml').send(
+    `<?xml version="1.0" encoding="UTF-8"?>\n` +
+    `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
+    `  <url><loc>${baseUrl(req)}/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>\n` +
+    `</urlset>\n`
+  );
+});
+
 app.use(express.static('public'));
 
 function baseUrl(req) {
@@ -164,18 +221,21 @@ app.get('/api/checkout/verify', async (req, res) => {
   }
 });
 
-// GET /api/health : utilisé par la routine de monitoring
+// GET /api/health : public = {"ok":true} uniquement ; détail Stripe/webhook réservé à l'admin
 app.get('/api/health', async (req, res) => {
   try {
     await pool.query('SELECT 1');
-    res.json({ ok: true, stripe: !!stripe, webhook: !!process.env.STRIPE_WEBHOOK_SECRET });
+    if (isAdmin(req)) {
+      return res.json({ ok: true, stripe: !!stripe, webhook: !!process.env.STRIPE_WEBHOOK_SECRET });
+    }
+    res.json({ ok: true });
   } catch (e) {
-    res.status(500).json({ ok: false, error: 'db' });
+    res.status(500).json({ ok: false });
   }
 });
 
-// GET /api/presales (tests)
-app.get('/api/presales', async (req, res) => {
+// GET /api/presales : liste des inscrits, réservée à l'admin (données personnelles)
+app.get('/api/presales', requireAdmin, async (req, res) => {
   try {
     const result = await pool.query('SELECT id, name, email, plan, paid, created_at FROM presales ORDER BY created_at DESC');
     res.json(result.rows);
